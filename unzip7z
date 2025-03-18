@@ -1,0 +1,49 @@
+#!/bin/bash
+
+zip_file="$1"
+dest_dir="$2"
+if [[ -z "$dest_dir" ]]; then
+    dest_dir="${2:-$(pwd)}"  # Usa el directorio actual si no se especifica
+fi
+    
+# Llamar a la función Python personalizada
+python3 - <<"EOF" "$zip_file" "$dest_dir"
+import os
+import sys
+import zipfile
+from tqdm import tqdm
+
+if len(sys.argv) < 3:
+    print("Error: Se requieren el archivo ZIP y la ruta de destino.")
+    sys.exit(1)
+
+zip_path = sys.argv[1]
+extract_path = sys.argv[2]
+
+def unzip_with_progress(zip_path, extract_path, chunk_size=4096):
+    if not os.path.exists(zip_path):
+        print(f"Error: El archivo {zip_path} no existe.")
+        sys.exit(1)
+
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        infos = zip_ref.infolist()
+        total_size = sum(info.file_size for info in infos)
+
+        with tqdm(total=total_size, unit='B', unit_scale=True, desc="Extrayendo") as pbar:
+            for info in infos:
+                extracted_path = os.path.join(extract_path, info.filename)
+
+                if info.is_dir():
+                    os.makedirs(extracted_path, exist_ok=True)
+                else:
+                    os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
+                    with zip_ref.open(info) as source, open(extracted_path, "wb") as target:
+                        while True:
+                            chunk = source.read(chunk_size)
+                            if not chunk:
+                                break
+                            target.write(chunk)
+                            pbar.update(len(chunk))
+
+unzip_with_progress(zip_path, extract_path)
+EOF
